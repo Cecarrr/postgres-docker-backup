@@ -1,0 +1,17 @@
+\getenv db POSTGRES_DB
+\getenv rw_pass APP_RW_PASSWORD
+\getenv ro_pass APP_RO_PASSWORD
+\getenv bk_pass BACKUP_PASSWORD
+
+CREATE ROLE app_rw      LOGIN PASSWORD :'rw_pass';
+CREATE ROLE app_ro      LOGIN PASSWORD :'ro_pass';
+CREATE ROLE backup_user LOGIN PASSWORD :'bk_pass';
+
+REVOKE ALL ON DATABASE :"db" FROM PUBLIC;
+GRANT CONNECT ON DATABASE :"db" TO app_rw, app_ro, backup_user;
+GRANT USAGE ON SCHEMA public TO app_rw, app_ro, backup_user;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_rw;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_rw;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO app_ro, backup_user;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO backup_user;
