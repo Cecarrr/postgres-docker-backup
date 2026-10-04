@@ -1,0 +1,6 @@
+[Unit]
+Description=Backup PostgreSQL (postgres-docker-backup)
+
+[Service]
+Type=oneshot
+ExecStart=%h/postgres-docker-backup/scripts/backup.sh

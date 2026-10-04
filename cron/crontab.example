@@ -1,2 +1,3 @@
+# Alternatif untuk laptop: lihat systemd/ (Persistent=true menjalankan jadwal yang terlewat)
 # Backup harian jam 02:00 (ganti /path/to dengan lokasi repo)
 0 2 * * * /path/to/postgres-docker-backup/scripts/backup.sh >> /path/to/postgres-docker-backup/logs/cron.out 2>&1
