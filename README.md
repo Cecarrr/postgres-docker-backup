@@ -1,18 +1,19 @@
 # postgres-docker-backup
 
-PostgreSQL 16 di Docker Compose dengan role hak-minimum, backup harian otomatis,
-dan **uji restore yang terverifikasi** (drop tabel, restore, bandingkan jumlah baris).
+PostgreSQL 16 di Docker Compose dengan role hak-minimum, backup harian otomatis (gzip, checksum, rotasi 7 hari), dan **uji pemulihan yang membuktikan data kembali identik**, termasuk skenario kehilangan volume total.
 
 ## Arsitektur
 
 ```
- cron (02:00) --> scripts/backup.sh --> docker compose exec pg_dump (backup_user)
-                       |                          |
-                       |                 [ container postgres:16 ] -- [ volume pgdata ]
-                       v                          ^
-        backups/*.sql.gz (rotasi 7 hari)          |
-        logs/backup.log                           |
- restore.sh / verify_restore.sh ---- psql (superuser di dalam container)
+ systemd timer (02:00, Persistent) / cron
+              |
+      scripts/backup.sh --- docker compose exec ---> [ postgres:16 ] -- volume pgdata
+   (backup_user, -h postgres, lock, sha256)
+              |
+   backups/*.sql.gz (+ .sha256, rotasi 7 hari)        logs/backup.log
+              |
+   scripts/restore.sh        (superuser, 1 transaksi, minta konfirmasi)
+   scripts/verify_restore.sh / scripts/disaster_test.sh  ->  bukti di docs/evidence/
 ```
 
 ## Struktur
@@ -21,102 +22,108 @@ dan **uji restore yang terverifikasi** (drop tabel, restore, bandingkan jumlah b
 docker-compose.yml         service postgres, volume named, healthcheck pg_isready
 .env.example               template konfigurasi (.env asli tidak di-commit)
 init/01_schema.sql         customers, orders, order_items + data dummy
-init/02_roles.sql          app_rw, app_ro, backup_user (hak minimum)
-scripts/backup.sh          pg_dump + gzip + rotasi 7 hari + log
-scripts/restore.sh         restore file backup ke database tujuan
-scripts/verify_restore.sh  uji restore otomatis
-cron/crontab.example       jadwal backup harian
+init/02_roles.sql          app_rw, app_ro, backup_user + default privileges
+scripts/lib.sh             fungsi bersama (log, sidik jari data, cek hak akses)
+scripts/backup.sh          pg_dump + gzip + sha256 + lock + rotasi + log
+scripts/restore.sh         restore (konfirmasi, satu transaksi, cek checksum)
+scripts/verify_restore.sh  uji: hapus semua tabel -> restore -> bandingkan data
+scripts/disaster_test.sh   uji: hapus volume -> buat ulang -> restore -> bandingkan
+systemd/                   timer harian dengan Persistent=true
+cron/crontab.example       alternatif jadwal dengan cron
+docs/evidence/             keluaran nyata dari setiap pengujian
 ```
 
 ## Menjalankan dari nol
 
-Prasyarat: Docker + Docker Compose plugin, cronie, git (opsional: klien `psql`).
+Prasyarat: Docker + Docker Compose plugin, git. Opsional: klien `psql`.
 
-```bash
+```
 git clone https://github.com/Cecarrr/postgres-docker-backup.git
 cd postgres-docker-backup
 cp .env.example .env
 nano .env                  # ganti semua password
-docker compose up -d
-docker compose ps          # tunggu status healthy
+docker compose up -d --wait
 ```
 
 ## Role
 
-| Role | Hak |
-|---|---|
-| app_rw | SELECT, INSERT, UPDATE, DELETE |
-| app_ro | SELECT |
-| backup_user | SELECT (cukup untuk pg_dump) |
+| Role         | Hak                                          |
+| ------------ | -------------------------------------------- |
+| app_rw       | SELECT, INSERT, UPDATE, DELETE               |
+| app_ro       | SELECT                                       |
+| backup_user  | SELECT (cukup untuk pg_dump)                 |
 
-Password diatur lewat `.env` dan dibaca oleh `init/02_roles.sql`, tidak ada password di repo.
+Tabel yang dibuat belakangan otomatis mendapat hak yang sama (`ALTER DEFAULT PRIVILEGES`). Password dibaca dari `.env` lewat `\getenv`; tidak ada password di repo.
 
 ## Penggunaan
 
-```bash
-./scripts/backup.sh                                       # backup manual
-./scripts/restore.sh backups/<file>.sql.gz [target_db]    # restore
-./scripts/verify_restore.sh                               # uji restore otomatis
+```
+./scripts/backup.sh                              # backup manual
+./scripts/restore.sh backups/<file>.sql.gz       # restore (minta konfirmasi bila menimpa database utama)
+./scripts/restore.sh backups/<file>.sql.gz uji   # restore ke database lain bernama "uji"
+./scripts/verify_restore.sh                      # uji restore lengkap
+ASSUME_YES=1 ./scripts/disaster_test.sh          # uji kehilangan volume (MENGHAPUS data lalu memulihkannya)
 ```
 
-Hasil backup ada di `backups/`, log di `logs/backup.log`. Backup yang lebih tua dari 7 hari dihapus otomatis.
+Backup yang gagal tidak meninggalkan file parsial dan dicatat di `logs/backup.log` beserta alasannya. Rotasi baru berjalan setelah backup baru sukses.
 
-## Jadwal cron
+## Penjadwalan
 
-Pasang dengan `crontab -e` (ganti `/path/to` dengan lokasi repo di mesin kamu):
-
-```
-0 2 * * * /path/to/postgres-docker-backup/scripts/backup.sh >> /path/to/postgres-docker-backup/logs/cron.out 2>&1
-```
-
-## Bukti uji restore
-
-Output `./scripts/verify_restore.sh` (tabel `order_items` di-drop, lalu dipulihkan dari backup):
+Systemd timer (disarankan untuk laptop, karena jadwal yang terlewat dijalankan saat laptop hidup):
 
 ```
-[1] Backup terbaru
-    backups/shopdb_20261004_221308.sql.gz
-[2] Jumlah baris SEBELUM:
-customers=100
-orders=300
-order_items=800
-[3] DROP TABLE order_items
-[4] Setelah drop:
-customers=100
-orders=300
-order_items=MISSING
-[5] Restore
- set_config 
-------------
- 
-(1 row)
-
- setval 
---------
-    100
-(1 row)
-
- setval 
---------
-    800
-(1 row)
-
- setval 
---------
-    300
-(1 row)
-
-Restore backups/shopdb_20261004_221308.sql.gz -> shopdb selesai
-[6] Jumlah baris SESUDAH:
-customers=100
-orders=300
-order_items=800
-RESULT: PASS
+mkdir -p ~/.config/systemd/user
+cp systemd/pg-backup.* ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now pg-backup.timer
 ```
+
+Alternatif cron: lihat `cron/crontab.example`.
+
+## Autentikasi
+
+Koneksi lewat jaringan wajib password (scram-sha-256): dari host lewat port 5432, dan dari container lewat nama service (`-h postgres`). Koneksi loopback di dalam container memakai `trust` (bawaan image resmi), sehingga `backup.sh` sengaja memakai `-h postgres` agar kredensial `backup_user` benar-benar divalidasi. `restore.sh` dan skrip uji memakai superuser lewat socket untuk operasi administratif. Bukti: `docs/evidence/auth.txt`.
+
+## Bukti pengujian
+
+Semua keluaran di bawah adalah hasil nyata dari menjalankan skrip di repo ini.
+
+| Pengujian | Membuktikan | Berkas |
+| --- | --- | --- |
+| Uji restore | Semua tabel dihapus lalu dipulihkan; jumlah baris dan md5 isi tiap tabel identik; hak akses role utuh | `docs/evidence/verify_restore.txt` |
+| Uji bencana | Volume dihapus, database dibuat ulang dari nol, dipulihkan dari backup; data identik dengan sebelum bencana | `docs/evidence/disaster_test.txt` |
+| Rotasi | Backup lebih dari 7 hari (dan checksum-nya) terhapus | `docs/evidence/rotation.txt` |
+| Jalur gagal | Backup gagal saat container mati: exit code 1, tidak ada file parsial, alasan tercatat | `docs/evidence/failure.txt` |
+| Autentikasi | Password salah ditolak; backup gagal bila password backup_user salah | `docs/evidence/auth.txt` |
+| Hak default | Tabel baru langsung bisa dibaca backup_user | `docs/evidence/default_privileges.txt` |
+
+Cara sidik jari data: untuk setiap tabel di schema `public`, dihitung `count(*)` dan `md5` dari seluruh baris (diurutkan). Pada uji bencana ditambahkan tabel penanda acak supaya data berbeda dari data awal hasil `init/`; kecocokan sesudah restore membuktikan data berasal dari backup.
+
+## Troubleshooting
+
+| Gejala | Penyebab / solusi |
+| --- | --- |
+| `permission denied` pada docker.sock | User belum di grup `docker`; `sudo usermod -aG docker $USER`, lalu login ulang |
+| Port 5432 sudah dipakai | Ada PostgreSQL lain di host; ubah mapping port di `docker-compose.yml` |
+| Skrip `init/` tidak berjalan lagi | `init/` hanya berjalan pada volume kosong; `docker compose down -v` menghapus data |
+| Permission denied saat mount `init/` (Fedora/SELinux) | Pastikan label `:z` pada volume `./init` |
+| Log `WARN Backup lain sedang berjalan` | Lock aktif; backup lain sedang berjalan, tunggu atau set `BACKUP_LOCK_WAIT` |
+| `up --wait` tidak dikenal | Perbarui Docker Compose plugin |
 
 ## Batasan
 
-- Backup masih di satu mesin yang sama dengan database (jika disk rusak, keduanya hilang).
-- Belum ada enkripsi pada file backup.
-- Belum ada backup offsite.
-- Cron tidak berjalan jika mesin mati pada jam jadwal.
+- Backup ada di mesin yang sama dengan database; jika disk rusak, keduanya hilang.
+- Backup tidak dienkripsi dan belum ada backup offsite.
+- Format plain SQL: restore selalu untuk seluruh database, bukan per tabel.
+- Role tidak ikut dalam backup; role dibuat ulang oleh `init/` pada volume baru.
+- Password ada di `.env` dan environment container (terlihat lewat `docker inspect`).
+- Belum ada notifikasi saat backup gagal, hanya log.
+- Data contoh kecil; durasi backup/restore pada data besar belum diukur.
+
+## Rencana
+
+CI (GitHub Actions: shellcheck + uji restore dari nol), enkripsi backup, lalu penyimpanan offsite.
+
+## Lisensi
+
+MIT. Lihat [LICENSE](LICENSE).

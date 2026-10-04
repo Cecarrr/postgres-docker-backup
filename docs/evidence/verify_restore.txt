@@ -1,0 +1,27 @@
+[1] Sidik jari SEBELUM
+    customers=100:4f29fcc5d95315e736424cd56c4a6b48
+    order_items=800:e2d760d6613905bd5c55f15ddcd72ea4
+    orders=300:8bd82de6dccdbfa7fe7f334aa4f6a38a
+[2] Backup
+2026-10-05 01:11:04 SUCCESS backups/shopdb_20261005_011104.sql.gz size=9962B
+2026-10-05 01:11:04 INFO Rotasi: 0 backup lebih dari 7 hari dihapus
+    file: /home/cecarrr/postgres-docker-backup/backups/shopdb_20261005_011104.sql.gz
+[3] Simulasi bencana: DROP semua tabel di schema public
+    tabel tersisa: 0
+[4] Restore
+2026-10-05 01:11:05 INFO Checksum OK: shopdb_20261005_011104.sql.gz
+2026-10-05 01:11:05 INFO Mulai restore shopdb_20261005_011104.sql.gz ke 'shopdb'
+2026-10-05 01:11:05 SUCCESS Restore shopdb_20261005_011104.sql.gz -> shopdb selesai
+[5] Sidik jari SESUDAH
+    customers=100:4f29fcc5d95315e736424cd56c4a6b48
+    order_items=800:e2d760d6613905bd5c55f15ddcd72ea4
+    orders=300:8bd82de6dccdbfa7fe7f334aa4f6a38a
+    sidik jari IDENTIK
+[6] Hak akses setelah restore
+    app_rw baca/tulis: OK
+    app_ro baca: OK
+    app_ro tulis ditolak: OK
+    backup_user baca: OK
+    backup_user tulis ditolak: OK
+RESULT: PASS
+2026-10-05 01:11:06 SUCCESS verify_restore PASS

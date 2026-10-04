@@ -1,0 +1,12 @@
+# Jalur gagal: container dihentikan, backup harus GAGAL dengan exit code != 0
+ Container pg_main Stopping 
+ Container pg_main Stopped 
+2026-10-05 01:10:59 FAILED backups/shopdb_20261005_011058.sql.gz reason=service "postgres" is not running 
+exit code: 1
+ Container pg_main Starting 
+ Container pg_main Started 
+ Container pg_main Running 
+ Container pg_main Waiting 
+ Container pg_main Healthy 
+tidak ada file .tmp tersisa:
+(bersih)

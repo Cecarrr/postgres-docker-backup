@@ -1,0 +1,14 @@
+# Autentikasi: password salah harus ditolak
+-- backup_user, password salah, lewat nama service:
+psql: error: connection to server at "postgres" (172.18.0.2), port 5432 failed: FATAL:  password authentication failed for user "backup_user"
+-- backup_user, password benar:
+OK: login berhasil
+-- dari host lewat port 5432, password salah:
+psql: error: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "app_ro"
+-- backup.sh dengan BACKUP_PASSWORD salah harus GAGAL:
+2026-10-05 01:10:58 FAILED backups/shopdb_20261005_011058.sql.gz reason=pg_dump: error: connection to server at "postgres" (172.18.0.2), port 5432 failed: FATAL:  password authentication failed for user "backup_user" 
+exit code: 1
+-- .env dipulihkan; backup.sh harus berhasil lagi:
+2026-10-05 01:10:58 SUCCESS backups/shopdb_20261005_011058.sql.gz size=9963B
+2026-10-05 01:10:58 INFO Rotasi: 0 backup lebih dari 7 hari dihapus
+exit code: 0

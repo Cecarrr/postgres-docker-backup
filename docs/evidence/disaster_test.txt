@@ -1,0 +1,57 @@
+[1] Tambah tabel penanda (supaya data berbeda dari data awal hasil init)
+NOTICE:  table "_restore_marker" does not exist, skipping
+[2] Sidik jari SEBELUM
+    _restore_marker=1:9d3930647322b7c04c17148145688fda
+    customers=100:4f29fcc5d95315e736424cd56c4a6b48
+    order_items=800:e2d760d6613905bd5c55f15ddcd72ea4
+    orders=300:8bd82de6dccdbfa7fe7f334aa4f6a38a
+[3] Backup
+2026-10-05 01:11:07 SUCCESS backups/shopdb_20261005_011107.sql.gz size=10105B
+2026-10-05 01:11:07 INFO Rotasi: 0 backup lebih dari 7 hari dihapus
+    file: /home/cecarrr/postgres-docker-backup/backups/shopdb_20261005_011107.sql.gz
+[4] BENCANA: docker compose down -v (volume dihapus)
+ Container pg_main Stopping 
+ Container pg_main Stopped 
+ Container pg_main Removing 
+ Container pg_main Removed 
+ Volume postgres-docker-backup_pgdata Removing 
+ Network postgres-docker-backup_default Removing 
+ Volume postgres-docker-backup_pgdata Removed 
+ Network postgres-docker-backup_default Removed 
+[5] Membuat ulang dari nol (init/ berjalan lagi)
+ Volume postgres-docker-backup_pgdata Creating 
+ Volume postgres-docker-backup_pgdata Creating 
+ Network postgres-docker-backup_default Creating 
+ Network postgres-docker-backup_default Creating 
+ Volume postgres-docker-backup_pgdata Created 
+ Volume postgres-docker-backup_pgdata Created 
+ Network postgres-docker-backup_default Created 
+ Network postgres-docker-backup_default Created 
+ Container pg_main Creating 
+ Container pg_main Created 
+ Container pg_main Starting 
+ Container pg_main Started 
+ Container pg_main Waiting 
+ Container pg_main Healthy 
+    sidik jari database baru, sebelum restore:
+    customers=100:9ab37306e644d33a1a11b7e9d50269c2
+    order_items=800:76e3d42c565adf848031616d716351ea
+    orders=300:8e81dba44260dd3a722c32c0e4a8696d
+[6] Restore dari backup
+2026-10-05 01:11:14 INFO Checksum OK: shopdb_20261005_011107.sql.gz
+2026-10-05 01:11:14 INFO Mulai restore shopdb_20261005_011107.sql.gz ke 'shopdb'
+2026-10-05 01:11:14 SUCCESS Restore shopdb_20261005_011107.sql.gz -> shopdb selesai
+[7] Sidik jari SESUDAH
+    _restore_marker=1:9d3930647322b7c04c17148145688fda
+    customers=100:4f29fcc5d95315e736424cd56c4a6b48
+    order_items=800:e2d760d6613905bd5c55f15ddcd72ea4
+    orders=300:8bd82de6dccdbfa7fe7f334aa4f6a38a
+    sidik jari IDENTIK
+[8] Hak akses setelah restore
+    app_rw baca/tulis: OK
+    app_ro baca: OK
+    app_ro tulis ditolak: OK
+    backup_user baca: OK
+    backup_user tulis ditolak: OK
+RESULT: PASS
+2026-10-05 01:11:15 SUCCESS disaster_test PASS

@@ -1,0 +1,4 @@
+# Tabel baru langsung bisa dibaca backup_user (default privileges)
+CREATE TABLE
+backup_user bisa SELECT, baris=0
+DROP TABLE

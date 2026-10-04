@@ -1,0 +1,7 @@
+# Rotasi: backup berumur 10 hari harus terhapus (beserta .sha256)
+sebelum:
+shopdb_UJI_ROTASI.sql.gz
+shopdb_UJI_ROTASI.sql.gz.sha256
+2026-10-05 01:10:58 SUCCESS backups/shopdb_20261005_011058.sql.gz size=9963B
+2026-10-05 01:10:58 INFO Rotasi: 1 backup lebih dari 7 hari dihapus
+OK: file lama dan .sha256 terhapus
