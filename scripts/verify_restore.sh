@@ -1,19 +1,32 @@
 #!/usr/bin/env bash
+# Bukti restore: sidik jari isi data -> backup -> hapus SEMUA tabel -> restore -> bandingkan -> cek hak akses
 set -Eeuo pipefail
-cd "$(dirname "$0")/.."
-set -a; source .env; set +a
+source "$(dirname "$0")/lib.sh"
 
-TABLES=(customers orders order_items)
-DROP_TABLE=order_items
-q(){ docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "$1"; }
-counts(){ for t in "${TABLES[@]}"; do echo "$t=$(q "SELECT count(*) FROM $t" 2>/dev/null || echo MISSING)"; done; }
+echo "[1] Sidik jari SEBELUM"
+BEFORE="$(fingerprint)"; echo "$BEFORE" | sed 's/^/    /'
+require_fingerprint "$BEFORE"
 
-echo "[1] Backup terbaru"; ./scripts/backup.sh
-LATEST=$(ls -1t backups/*.sql.gz | head -n1); echo "    $LATEST"
-BEFORE=$(counts); echo "[2] Jumlah baris SEBELUM:"; echo "$BEFORE"
-echo "[3] DROP TABLE $DROP_TABLE"; q "DROP TABLE $DROP_TABLE" >/dev/null
-echo "[4] Setelah drop:"; counts
-echo "[5] Restore"; ./scripts/restore.sh "$LATEST"
-AFTER=$(counts); echo "[6] Jumlah baris SESUDAH:"; echo "$AFTER"
+echo "[2] Backup"
+SINCE="$(date +%s)"
+BACKUP_LOCK_WAIT=120 ./scripts/backup.sh
+LATEST="$(latest_backup)"; echo "    file: $LATEST"
+backup_fresh "$LATEST" "$SINCE"
 
-if [ "$BEFORE" = "$AFTER" ]; then echo "RESULT: PASS"; else echo "RESULT: FAIL"; exit 1; fi
+echo "[3] Simulasi bencana: DROP semua tabel di schema public"
+psql_admin -c "DROP TABLE $(tables | sed 's/.*/public."&"/' | paste -sd, -) CASCADE" > /dev/null
+echo "    tabel tersisa: $(tables | wc -l)"
+
+echo "[4] Restore"
+ASSUME_YES=1 ./scripts/restore.sh "$LATEST"
+
+echo "[5] Sidik jari SESUDAH"
+AFTER="$(fingerprint)"; echo "$AFTER" | sed 's/^/    /'
+require_fingerprint "$AFTER"
+compare_fingerprint "$BEFORE" "$AFTER"
+
+echo "[6] Hak akses setelah restore"
+check_privileges
+
+echo "RESULT: PASS"
+log SUCCESS "verify_restore PASS"
